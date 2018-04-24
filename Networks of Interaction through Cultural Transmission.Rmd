@@ -1,0 +1,609 @@
+---
+title: "Networks of Interaction through Cultural Transmission"
+author: "Andy Upton"
+output: 
+  html_document:
+    theme: flatly
+    highlight: monochrome
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Searching for Variation
+
+Archaeology is, in many ways, the study of artifactual variation. Without written records, all there is to rely on are the materials remains and traces of past peoples to infer who they were, what they did, and maybe get to why they did what they did. Understanding artifactual variation can be particularly instructive in contexts where different material culture traditions merge, blend, or are otherwise present in the same place at the same time. 
+
+This post is all about exploring variation in artifacts to understand how different communities interacted with each other. The basic idea is that, artifacts or artifact attributes, should pattern differently if they were used in some capacity to send a social signal or if they were constrained by engineering principles. When using naturally available raw materials to make functional or decorative objects such as pottery vessels, arrowheads, axes, hair beads, clothing, or a birch bark canoe, there are limits imposed by those raw materials that constrain the ability to make things a certain way. You can only make an arrowhead so thick or long before it impedes your ability to be successful in hunting. Likewise, you can only make pottery so thin before it fails as a cooking vessel or hair beads so large and complex before impacting day to day activities. On the other hand, there can often be a significant amount of play in certain attributes. For example, with something as malleable as clay, cooking vessels have taken on a remarkable amount of diversity in such contexts as the [Jōmon period of Japan](https://www.ancient.eu/Jomon_Pottery/), [the Late Valdivia phase of coastal Ecuador](https://www.sciencedirect.com/science/article/pii/S0278416516300472), or [in the woodlands of eastern North America](https://archive.org/details/aboriginalpottery00holmrich). That these vessel forms can, and do, vary across the landscape and through time is evidence that people imbue the things they make with a sense of themselves and their communities as a tiny encapsulation of their interactions with others - who they learned from, imitated, or wanted to impress with their wares. Even in today's world, people continue to use material culture to send signals - wearing sports gear to show support for a favorite team, driving a fancy car or wearing a nice watch to show off wealth, wearing a ring to show a marriage relationship, or whole suites of clothing choices to send social signals indicating identification as a member of a particular group and not others. 
+
+But how can an archaeologist determine which attributes were constrained by raw material-imposed engineering constraints and which attributes might have sent social signals? One way is to examine variation in artifact attributes. When objects are made, it takes a cultural world to transmit information related to production. If certain attributes don't change overtime or across space, then we can infer that they are likely being constrained by engineering forces. Attributes unshackled from engineering constraints that are free to vary markedly between assemblages are therefore more likely to have been used to communicate social information. Any two given community's assemblages can be compared considering those attributes only and this enables inferences to be made about how often their members may have interected by learning from and teaching each other, being kin, or having a relationships through marriage bonds.   
+
+This methodology is used to model social interaction patterns in a unique archaeological case study - the Late Prehistoric central Illinois River valley. You can get to know the region and the artifacts under consideration in this post by [heading here](https://www.andyupton.net/ceramics). Briefly, beginning in the 12th century A.D., a cultural phenomenon archaeologists refer to as [Mississippian](https://www.georgiaencyclopedia.org/articles/history-archaeology/mississippian-period-overview) took off in west-central Illinois. From an economy largely based on maize agriculture, Mississippian chiefs in central Ilinois and throughout eastern North America led the largest and most complex communities seen in pre-Columbian times north of Mexico. Planned towns were constructed around large central plazas and often flanked by significant temple-mounds. These towns were often surrounded by bastioned palisades. The CIRV is known for quite high levels of evidence for violence, which appeared to have worsened following the in-migration of a tribal Oneota group circa 1300 A.D. (Milner, 1999; Steadman, 2008; Vanderwarker and Wilson, 2016; Wilson, 2012). The network models below will help answer questions related to how Mississippian peoples were interacting across communities in a violent environment and how those interaction patterns may have structured, and been restructured by, the Oneota in-migration. Did violence limit interaction or mobility patterns? And were immigrant Oneota peoples integrated into the indigenous Mississippian social fabric, or did they exacerbate pluralistic tensions? 
+
+```{r libraries and introducing the datasets, message = FALSE, warning = FALSE}
+# Load the required libraries for analysis
+library(tidyverse)
+library(igraph)
+library(cluster)
+library(cowplot)
+library(ggridges)
+library(readxl)
+library(knitr)
+library(threejs)
+library(readr)
+library(colorRamps)
+library(RColorBrewer)
+
+# Read in data sets - domestic jars and serving plates
+jars <- read_csv("jars_cont.csv", col_types = cols(Orifice = col_double(), 
+                  RimAngle = col_double()))
+
+# Read in sherd id information
+jar_unique <- read_csv("jar_unique.csv")
+
+# Set row names as the unique sherd id's
+rownames(jars) <- jar_unique$`2`
+
+# Do the same for plate data set
+plates <- read_csv("plate_cont.csv", col_types = cols(FlareAngle = col_double(), 
+                    MaxDiameter = col_double()))
+plate_unique <- read_csv("plate_unique.csv")
+rownames(plates) <- plate_unique$`1`
+```
+
+To answer the questions above, I consider two prominent ceramic vessel classes from our case study region: domestic cooking jars and serving plates. Domestic jars, such as [the cord-marked vessel found here](https://www.andyupton.net/), are globular vessels with everted rims. Serving plates, such as the particularly fine example found at [Lawrenz Gun Club](https://www.andyupton.net/ceramics), look strikingly similar to the kind of plate you might get at a fancy Italian restaurant today. Well, except for the rounded bottoms since Mississippian and Oneota peoples didn't make flat tables to eat off of.  
+
+Here's a glimpse at the data sets we'll consider:
+
+```{r jars, echo=FALSE}
+kable(head(jars))
+dim(jars)
+levels(as.factor(jars$Site))
+```
+So that's 595 jar vessels from 18 sites. 
+
+```{r, echo=FALSE}
+kable(head(plates))
+dim(plates)
+levels(as.factor(plates$Site))
+```
+And 506 plate vessels from 16 sites. One site, Eveland, is thought to have been occupied prior to the emergence of plates in the central Illinois River valley. Another site, C.W. Cooper, only has Oneota material culture and Oneota don't typically make or use plates outside of this region. 
+
+You'll notice some NA's - or missing values. These are prevalent because of the fact that we're working with cooking vessels and dishes that have sat in the ground for a thousand years or so. Not to worry, we can handle those in a variety of ways. 
+
+Let's take a look at some summaries of the data. 
+
+```{r summary of data, warning=F, message=F}
+# Function to compute the length of the data set, ignoring NAs
+my_length <- function(x){
+          sum(!is.na(x))
+  }
+
+# Function to compute number of vessels in total
+n_vessels <- function(x){
+  x %>%
+    summarise_all(my_length)
+  }
+
+# Function to computer number of vessels by "Site"; 
+# This function can group the data by any factor or string column, "Site" is used here
+n_vessels_by_site <- function(x){
+          x %>% group_by(Site) %>% 
+          summarise_all(my_length)
+  }
+
+# Table of jar vessels by site
+kable(n_vessels(jars), caption = "Number of jar vessles by measurement")
+kable(n_vessels_by_site(jars), caption = "Number of jar vessels by site")
+
+# Table of plate vessels by site
+kable(n_vessels(plates), caption = "Number of plate vessles by measurement")
+kable(n_vessels_by_site(plates), caption = "Number of plate vessels by site")
+```
+
+
+## Engineering constraint or social signaling?
+
+The [Eerkens and Bettinger (2008)](http://eerkens.ucdavis.edu/uploads/7/9/3/8/79382344/ct2008.pdf) model relies on three assemblage based measures to tease out different kinds of variation in artifact type-attributes. These measures are based on assemblage summary statistics including the mean, standard deviation, and coefficient of variation from each type-attribute. Much of the focus of the Eerkens and Bettinger model is to differentiate between type-attributes used to make individual or groups scale identification, which has been referred to elsewhere as emblemic or assertive markers (Wiessner 1984). For the purposes of this analysis, one of these measures in particular is relevant - the Variation of Variation (VOV), or coefficient of variation of assemblage specific type-attribute coefficients of variation. Essentially, a high VOV score shows significant variation in an attribute between and within assemblages, and therefore suggests that engineering factors likely did not constrain the execution of those high VOV type-attributes during pottery vessel manufacture. It is therefore much more likely that the variation between assemblages in these attributes in particular would reflect the cultural transmission of information related to pottery production or group signaling behavior. 
+
+The functions in the following code chunk allow for the implementation of the Eerkens and Bettinger (2008) measures in R. 
+
+```{r EB functions, warning=FALSE, message=FALSE}
+# Unbiased estimator of coefficient of variation
+my_cv <- function(x){
+          (sd(x, na.rm = TRUE)/mean(x, na.rm = TRUE)) * (1 + (1/(4*length(x[!is.na(x)]))))
+  }
+
+# Standard Deviation, removing missing values by default
+my_sd <- function(x){
+          sd(x, na.rm = TRUE)
+  }
+
+# Mean function, removing missing values by default
+my_mean <- function(x){
+          mean(x, na.rm = TRUE)
+  }
+
+# Variation of Variation (VOV) 
+# Unbiased CV of assemblage CVs
+VOV <- function(x){x %>%
+    group_by(Site) %>%
+      summarise_all(my_cv) %>%
+      summarise_all(my_cv)
+  }
+
+# Variation of the mean (VOM)
+# Unbiased CV of assemblage means
+VOM <- function(x){x %>%
+    group_by(Site) %>%
+      summarise_all(my_mean) %>%
+      summarise_all(my_cv)
+  }
+
+# Average variation (AV)
+# Mean of assemblage CVs
+AV <- function(x){x %>% 
+    group_by(Site) %>%
+      summarise_all(my_cv) %>%
+      summarise_all(my_mean)
+  }
+```
+
+We can now apply the Eerkens and Bettinger (2008) measures to our [Late Prehistoric CIRV data sets of jars and plates.](https://www.andyupton.net/ceramics) 
+
+```{r EB_stats and table, warning=F, message=F}
+# Calculate VOV for jars and plates, add vessel class to attribute name
+jarsVOV <- VOV(jars)
+colnames(jarsVOV) <- paste("Jar", colnames(jarsVOV), sep = "_")
+platesVOV <- VOV(plates)
+colnames(platesVOV) <- paste("Plate", colnames(platesVOV), sep = "_")
+
+# Calculate AV for jars and plates, add vessel class to attribute name
+jarsAV <- AV(jars)
+colnames(jarsAV) <- paste("Jar", colnames(jarsAV), sep = "_")
+platesAV <- AV(plates)
+colnames(platesAV) <- paste("Plate", colnames(platesAV), sep = "_")
+
+# Calculate VOM for jars and plates, add vessel class to attribute name
+jarsVOM <- VOM(jars)
+colnames(jarsVOM) <- paste("Jar", colnames(jarsVOM), sep = "_")
+platesVOM <- VOM(plates)
+colnames(platesVOM) <- paste("Plate", colnames(platesVOM), sep = "_")
+
+# Transpose scores to prepare for concatenating into a table
+VOV_scores <- t(tbl_df(c(jarsVOV[-1], platesVOV[-1])))
+VOM_scores <- t(tbl_df(c(jarsVOM[-1], platesVOM[-1])))
+AV_scores <- t(tbl_df(c(jarsAV[-1], platesAV[-1])))
+
+# Bind together different score metrics and provide column names
+EB_scores <- as.data.frame(cbind(scale(VOV_scores), scale(VOM_scores), scale(AV_scores)))
+colnames(EB_scores) <- c("VOV", "VOM", "AV")
+
+# Add a column of the rownames and order the table by VOV
+EB_scores <- EB_scores %>%
+              rownames_to_column(var = "Metric") %>%
+              arrange(desc(VOV))
+
+# Table of Eerkens and Bettinger scores
+kable(EB_scores)
+
+```
+
+The table above shows the scores obtained for each Eerkens and Bettinger measure across the jar and plate type-attributes. Following their model, we can plot the results to determine where natural breaks lie in the data that suggest which attributes to include in our network analysis. 
+
+```{r EB graphs, message=F, warning=F}
+# Plot VOV 
+pVOV <- EB_scores %>%
+          gather(key = EB_Metric, value = Score, VOV:AV) %>%
+          filter(EB_Metric == "VOV") %>%  
+          ggplot() + geom_point(aes(x = reorder(Metric, Score), y = Score), 
+                                shape = 18, size = 4) + 
+          ylab("VOV") + xlab("") + 
+          theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+                axis.text.y = element_text(family = "Times", color = "gray5"), 
+                axis.title.y = element_text(family = "Times", color = "gray5"), 
+                legend.position = "none") + coord_cartesian(ylim = c(-2, 2)) +
+          scale_y_continuous(breaks = c(-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2))
+
+# Plot AV
+pAV <- EB_scores %>%
+          gather(key = EB_Metric, value = Score, VOV:AV) %>%
+          filter(EB_Metric == "AV") %>%  
+          ggplot() + geom_point(aes(x = reorder(Metric, Score), y = Score), 
+                                shape = 18, size = 4) + 
+          ylab("AV") + xlab("") + 
+          theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+                axis.text.y = element_text(family = "Times", color = "gray5"), 
+                axis.title.y = element_text(family = "Times", color = "gray5"), 
+                legend.position = "none") + coord_cartesian(ylim = c(-2, 2.2)) +
+          scale_y_continuous(breaks = c(-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2)) 
+
+# Plot VOM
+pVOM <- EB_scores %>%
+          gather(key = EB_Metric, value = Score, VOV:AV) %>%
+          filter(EB_Metric == "VOM") %>%  
+          ggplot() + geom_point(aes(x = reorder(Metric, Score), y = Score), 
+                                shape = 18, size = 4) + 
+          ylab("VOM") + xlab("") + 
+          theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), 
+                axis.text.y = element_text(family = "Times", color = "gray5"), 
+                axis.title.y = element_text(family = "Times", color = "gray5"), 
+                legend.position = "none") + coord_cartesian(ylim = c(-2, 2)) +
+          scale_y_continuous(breaks = c(-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2))
+
+plot_grid(pVOV, pVOM, pAV, align = "hv")
+```
+
+Our primary interest is in the VOV metric, which measures the amount of variability around the mean from assemblage to assemblage, and so we can focus on the results obtained from that metric in particular. A high VOV score would indicate substantial variability between assemblages and therefore suggests that a high VOV attribute is more likely to be a locus of social signaling. There are two clear breaks present in the VOV distribution - one for the highest two scores and then another in the middle of the VOV score distribution. We'll use the middle cutoff and select the eight type-attributes with a higher VOV score to construct our attribute networks for the Late Prehistoric CIRV. Those attributes include: 
+
+###Plate:
+>####flare angle, trailing thickness, incising thickness, and diameter
+
+###Jar 
+>####rim angle, trailing thickness, rim height, and wall thickness. 
+
+To get a sense of the variation present in these type-attributes, we can plot their distributions across each assemblage using so-called ridgeline plots. 
+
+```{r EB ridgeline plots, message=F, warning=F, fig.height=7}
+
+# Gather data for faceting. Faceting allows the graph to show each attribute's 
+# distribution across the different sites
+pGathered <- gather(plates[, c(1, 2, 6, 7, 8)], Attribute, Value, MaxDiameter:MaxTrailing)
+jGathered <- gather(jars[, c(1, 5, 6, 7, 9)], Attribute, Value, MaxWall:MaxTrailing)
+
+# read in node tables to add column to arrange by time period in ridgeline plots
+jar_node_table <- read_csv("Jar_node_table.csv")
+colnames(jar_node_table) <- c("Site", "Label", "Long", "Lat", "Time")
+plate_node_table <- read_csv("Plate_node_table.csv")
+colnames(plate_node_table) <- c("Site", "Label", "Long", "Lat", "Time")
+
+# join node table to allow for separating out sites by time in plots
+pGathered <- pGathered %>% left_join(plate_node_table[c(1, 5)])
+pGathered$Time1 <- as.factor(pGathered$Time) # Add Time column as factor for discrete color scale
+jGathered <- jGathered %>% left_join(jar_node_table[c(1, 5)])
+jGathered$Time1 <- as.factor(jGathered$Time)
+
+# Create plate ridgeline plot
+pRidge <- pGathered %>% group_by(Site) %>% arrange(Time, Site) %>% 
+            ggplot(aes(x = Value, y = reorder(Site, desc(Time)), fill = Time1)) + 
+            geom_density_ridges() + 
+            facet_wrap(~Attribute, scale = "free") + 
+            theme(axis.text.y = element_text(size=12)) + 
+            xlab("") + 
+            ylab("") + ggtitle("Plate Attributes") +
+            scale_fill_brewer(palette = "Greens") + 
+            theme(legend.position = "none") 
+
+
+# Create plate ridgeline plot
+jRidge <- jGathered %>% group_by(Site) %>% arrange(Site, Time) %>% 
+            ggplot(aes(x = Value, y = reorder(Site, desc(Time)), fill = Time1)) + 
+            geom_density_ridges() + 
+            facet_wrap(~Attribute, scale = "free") + 
+            theme(axis.text.y = element_text(size=12)) + 
+            xlab("") + 
+            ylab("") + ggtitle("Jar Attributes") +
+            scale_fill_brewer(palette = "Greens") + 
+            theme(legend.position = "none") 
+        
+
+# Show the jar ridgeline plot
+jRidge
+
+# Show the plate ridgeline plot
+pRidge
+```
+
+
+## Calculating proportional similarity from socially mediated artifact type-attributes
+
+Now that we have identified the specific variables that are likely to contain a social information bearing component, we can begin constructing social networks that consider those variables. First, let's prepare the data. 
+
+```{r social_variables}
+# Select the socially mediated variables from jars and plates
+jar_social <- jars %>%
+                select(Site, MaxWall, RimHeight, RimAngle, MaxTrailing)
+
+plate_social <- plates %>%
+                  select(Site, MaxDiameter, FlareAngle, MaxIncising, MaxTrailing)
+```
+
+The next step is to make pairwise comparisons of each sherd-to-sherd combination. To do this, we'll use the Gower distance metric, which is basically range-standardized city-block distance, and has been used to construct other archaeological networks (Peeples 2011). Gower distance computes the distance between any two given observations and then scales that distance over the range of the observations to produce a value between 0, indicating complete similarity, and 1, indicating complete distance. Since we are concerned with the similarity between sites, as opposed to the distance between sites, however, we have to convert the distance score to a similarity score. This is easy to do by subtracting each element of the distance matrix from 1. Since we're concerned about site-site comparisons, the final step here is to ignore the unique sherd i.d's and instead use each site as a name. 
+
+```{r gower_distance}
+# Calculating Gower distance for jars
+jdaisy <- as.matrix(daisy(jar_social[-1], metric = "gower", stand = TRUE))
+
+# Convert matrix of distances to matrix of similarities
+jdaisy_sim <- 1 - jdaisy
+
+# Change from unique sherd i.d. to site name for column and row names
+rownames(jdaisy_sim) <- as.matrix(jars[1])
+colnames(jdaisy_sim) <- as.matrix(jars[1])
+
+# Calculating Gower distance for plates
+pdaisy <- as.matrix(daisy(plate_social[-1], metric = "gower", stand = TRUE))
+
+# Convert matrix of distance to matrix of similarities
+pdaisy_sim <- 1 - pdaisy
+
+# Change from unique sherd i.d. to site name for column and row names 
+rownames(pdaisy_sim) <- as.matrix(plates[1]) 
+colnames(pdaisy_sim) <- as.matrix(plates[1])
+```
+
+## Turning similarity into social networks
+
+We now have two very large similarities matrices. The jar matrix is composed of some 354,025 pairwise comparisons and the plate matrix is composed of 256,036 comparisons. That's a lot of sherd to sherd similarity scores! We need to control for the comparisons that aren't meaningful (some sites weren't occupied at the same time as each other). It's easier working with an edgelist, which has three columns and is very long, as opposed to an adjacency matrix, which has many rows and many columns. The igraph suite is very useful for handling network data in R. We'll construct some basic graphs from the adjacency matrices. 
+
+```{r igraph_creation}
+# Graph object of jars
+jg <- graph_from_adjacency_matrix(jdaisy_sim, mode = "directed", weighted = TRUE)
+
+# Graph object of plates
+pg <- graph_from_adjacency_matrix(pdaisy_sim, mode = "directed", weighted = TRUE)
+
+```
+
+With graphs in hand, we can calculate the proportional similarity of each site to every other site. This is essentially a distillation of the pairwise comparisons, and is accomplished by calculating the sum of all pairwise similarities and dividing that by the total number of sherd to sherd comparisons. Because the vessel assemblages are all quite similar, range normalization is used such that the closest site to any given site (based on proportional similarity) is given an edge weight of 1 and the most distant site is given a 0. A threshold of greater than 0.5 will be used such that only the strongest relationships are modelled. These techniques (normalizing proportional similarity and applying a threshold) will make the resulting network graphs much more straightforward to interpret. 
+
+```{r edgelist creation, message=F, warning=F}
+# Construct jar weighted edgelist
+jel <- as_edgelist(jg, names = TRUE)
+jweights <- as.numeric(E(jg)$weight)
+jwel <- tbl_df(cbind(jel, jweights))
+colnames(jwel) <- c("Source", "Target", "weight")
+jwel$weight <- as.numeric(jwel$weight)
+
+# Construct plate weighted edgelist
+pel <- as_edgelist(pg, names = TRUE)
+pweights <- as.numeric(E(pg)$weight)
+pwel <- tbl_df(cbind(pel, pweights))
+colnames(pwel) <- c("Source", "Target", "weight")
+pwel$weight <- as.numeric(pwel$weight)
+
+# Proportional similarity of plates
+plate_ps <- pwel %>%
+              group_by(Source, Target) %>%
+              summarise(sum = sum(weight, na.rm = TRUE), n = n()) %>%
+              mutate(Prop_sim = sum/n) 
+
+# Proportional similarity of jars
+jar_ps <- jwel %>%
+              group_by(Source, Target) %>%
+              summarise(sum = sum(weight, na.rm = TRUE), n = n()) %>%
+              mutate(Prop_sim = sum/n) 
+
+# Function to range normalize the proportional similarity weights between 0 and 1
+range01 <- function(x){
+            (x-min(x))/(max(x)-min(x))
+  }
+
+# Range normalize the proportional similarity scores
+range_norm_jar_ps <- jar_ps %>%
+                        na.omit() %>%
+                        group_by(Source) %>%
+                        mutate(Range_prop_sim = range01(Prop_sim))
+        
+range_norm_plate_ps <- plate_ps %>%
+                          na.omit() %>%
+                          group_by(Source) %>%
+                          mutate(Range_prop_sim = range01(Prop_sim))
+
+# Filter to only include scores above 0.5 and remove recursive edges 
+# (i.e. node edges pointing to the node itself)
+range_norm_jar_ps_filt <- range_norm_jar_ps %>%
+                            filter(Range_prop_sim > 0.5) %>%
+                            filter(Source != Target)
+                            
+range_norm_plate_ps_filt <- range_norm_plate_ps %>%
+                              filter(Range_prop_sim > 0.5) %>%
+                              filter(Source != Target)
+
+```
+
+## Considering more than just edge weights
+
+It's often the case the ancillary data in addition to graph edge weights can be useful for understanding the nature relationships. This also helps in network graph rendering. We'll add geographic and temporal data to our edgelists below. 
+
+```{r join_time_distance_geo_Data, message=F, warning=F}
+# Read in tables of jar site names, geographic coords., and time distinction
+# For time, 1 is a primary occupation prior to Oneota in-migration
+# and 2 is a primary occupation succeeding Oneota in-migration
+jar_node_table <- read_csv("Jar_node_table.csv")
+colnames(jar_node_table) <- c("Source", "Label", "Long", "Lat", "Time")
+plate_node_table <- read_csv("Plate_node_table.csv")
+colnames(plate_node_table) <- c("Source", "Label", "Long", "Lat", "Time")
+
+# Join the node table columns to the edgelist, dropping the extra columns used
+# to calculate the range normalized similarity
+jar_t1 <- full_join(range_norm_jar_ps_filt[c(-3:-5)], jar_node_table[-2], by = "Source")
+plate_t1 <- full_join(range_norm_plate_ps_filt[c(-3:-5)], plate_node_table[-2], by = "Source")
+
+# Prepare node tables to join time designation for the target node
+colnames(jar_node_table) <- c("Target", "Label", "Long", "Lat", "Time2")
+colnames(plate_node_table) <- c("Target", "Label", "Long", "Lat", "Time2")
+
+# Join Time 2 column to Target node 
+jar_edgelist_complete <- left_join(jar_t1, jar_node_table[c(-2:-4)], by = "Target")
+plate_edgelist_complete <- left_join(plate_t1, plate_node_table[c(-2:-4)], by = "Target")
+
+# Change "Range_prop_sim" column name to "weight" for Gephi/igraph
+colnames(jar_edgelist_complete) <- c("Source", "Target", "weight", "Long", "Lat", "Time", "Time2")
+colnames(plate_edgelist_complete) <- c("Source", "Target", "weight", "Long", "Lat", "Time", "Time2")
+
+# Write complete edgelists
+# write_excel_csv(jar_edgelist_complete, "jar_edgelist_complete_March2018.csv")
+# write_excel_csv(plate_edgelist_complete, "plate_edgelist_complete_March2018.csv")
+
+# Create Pre- and Post-Migration Edgelists
+jar_pre_el_need_dist <- jar_edgelist_complete %>%
+                        filter(Time == Time2) %>%
+                        filter(Time == 1)
+
+jar_post_el_need_Law <- jar_edgelist_complete %>%
+                         filter(Time == Time2) %>%
+                         filter(Time == 2)
+
+plate_pre_el_need_dist <-  plate_edgelist_complete %>%
+                           filter(Time == Time2) %>%
+                           filter(Time == 1)
+
+plate_post_el_need_Law <- plate_edgelist_complete %>%
+                           filter(Time == Time2) %>%
+                           filter(Time == 2)
+
+# One site, Lawrenz Gun Club, has an occupation in both time periods, so we have to 
+# control for that
+Law_jar_post <- jar_edgelist_complete %>%
+                  filter(Time == 2 & Target == "Lawrenz Gun Club" | 
+                           Source == "Lawrenz Gun Club" & Time2 == 2 ) %>%
+                    mutate(Time = replace(Time, Time==1, 2)) %>%
+                    mutate(Time2 = replace(Time2, Time2==1, 2))
+
+Law_plate_post <- plate_edgelist_complete %>%
+                    filter(Time == 2 & Target == "Lawrenz Gun Club" | 
+                             Source == "Lawrenz Gun Club" & Time2 == 2 ) %>%
+                    mutate(Time = replace(Time, Time==1, 2)) %>%
+                    mutate(Time2 = replace(Time2, Time2==1, 2))
+
+# Bind the Lawrenz Gun Club post-migration edges to the post-migration edgelists
+jar_post_el_need_dist <- rbind(jar_post_el_need_Law, Law_jar_post)
+
+plate_post_el_need_dist <- rbind(plate_post_el_need_Law, Law_plate_post)
+
+# Adding geographic coordinates
+# Read in matrix of site distances
+site_distances <- read_csv("Site Distances Matrix in km.csv")
+site_distances <- column_to_rownames(site_distances, var = "X1") #first column of site names to rownames 
+
+# Convert geographic distance matrix to graph object
+distance_g <- graph_from_adjacency_matrix(as.matrix(site_distances), weighted = TRUE, 
+                                                    mode = "directed")
+
+# Convert geo distance graph object to edgelist
+distance_el <- as_edgelist(distance_g)
+distance_el_weight <- as.numeric(E(distance_g)$weight)
+distance_el <- tbl_df(cbind(distance_el, distance_el_weight))
+colnames(distance_el) <- c("Source", "Target", "weight")
+distance_el$Distance <- as.numeric(distance_el$weight)
+
+# Merge the geographic distance edgelist with jar and plate edgelists
+jar_pre_el_complete <-merge(jar_pre_el_need_dist, distance_el[-3])
+jar_post_el_complete <- merge(jar_post_el_need_dist, distance_el[-3])
+plate_pre_el_complete <- merge(plate_pre_el_need_dist, distance_el[-3])
+plate_post_el_complete <- merge(plate_post_el_need_dist, distance_el[-3])
+
+# Combine the pre- and post-migration data sets into a single edgelist
+# Each edgelist will become one layer in a multilayer network analysis
+jar_el_all_time_complete <- rbind(jar_pre_el_complete, jar_post_el_complete)
+plate_el_all_time_complete <- rbind(plate_pre_el_complete, plate_post_el_complete)
+```
+
+The complete and prepared edgelists from above are now ready to be plotted. There are many options to plot graph objects in R, but it's hard to beat the aesthetics of Gephi. [You can view a few of these graphs as rendered in Gephi here.](https://www.andyupton.net/multilayer-network-analysis) 
+
+In my next post on this subject, I'll discuss how to analyze networks such as these using a variety of routines in the igraph package as well as how to understand the results using Monte Carlo similations based on network randomization. Also coming is a post describing how to combine these networks together in a multilayer network analysis. For a full description of the methods used and interpretations, you'll have to wait for my dissertation to be defended. That's coming later in 2018. 
+
+Until then, let's visualize each graph object in 3D to show off the archaeological ceramic attribute networks in their full glory! Returning to our questions from the introduction, what do you think might be said about interaction patterns and their role structuring Oneota in-migration based on the network models below? 
+
+
+```{r}
+
+# Create new edgelists with just the Source, Target, and weight colummns
+# Need to order the edges by ascending weight to properly color them in the visualization
+jelvis <- arrange(jar_el_all_time_complete[1:3], weight)
+jelprevis <- arrange(jar_pre_el_complete[1:3], weight)
+jelpostvis <- arrange(jar_post_el_complete[1:3], weight)
+pelvis <- arrange(plate_el_all_time_complete[1:3], weight)
+pelprevis <- arrange(plate_pre_el_complete[1:3], weight)
+pelpostvis <- arrange(plate_post_el_complete[1:3], weight)
+
+# Convert character columns to factor to enable plotting features
+cols <- c(1, 2)
+jelvis[cols] <- lapply(jelvis[cols], factor)
+jelprevis[cols] <- lapply(jelprevis[cols], factor)
+jelpostvis[cols] <- lapply(jelpostvis[cols], factor)
+pelvis[cols] <- lapply(pelvis[cols], factor)
+pelprevis[cols] <- lapply(pelprevis[cols], factor)
+pelpostvis[cols] <- lapply(pelpostvis[cols], factor)
+
+# igraph objects from edgelist dataframes
+jgvis <- graph_from_data_frame(jelvis, directed = TRUE)
+jgprevis <- graph_from_data_frame(jelprevis, directed = TRUE)
+jgpostvis <- graph_from_data_frame(jelpostvis, directed = TRUE)
+pgvis <- graph_from_data_frame(pelvis, directed = TRUE)
+pgprevis <- graph_from_data_frame(pelprevis, directed = TRUE)
+pgpostvis <- graph_from_data_frame(pelpostvis, directed = TRUE)
+
+# Create warm color scale function for edges (too many edges for a color palette)
+# Yellow is a weaker tie while red is a stronger tie
+# Since the edge lists are arranged by ascending weight, each edge will get a unique
+# color value commensurate with its value (lower weights will be more yellow, higher more red).
+colfunc <- colorRampPalette(c("yellow", "orange", "red"))
+
+# Create a vector of sizes for the vertices' labels
+vsizejall <- rep.int(.25, 18)
+vsizejpre <- rep.int(.25, 12)
+vsizejpost <- rep.int(.25, 7)
+vsizeppre <- rep.int(.25, 11)
+vsizeppost <- rep.int(.25, 6)
+vsizepall <- rep.int(.25, 16)
+
+# colfunction is used to create a color scale for the edges
+# Vertex "shapes" derive from their names in the igraph object
+# Multiple edge widths are not supported yet, so only color is used to infer strength of tie
+
+# -----Graph of pre-migration jars-----
+graphjs(jgprevis, edge.color = colfunc(81), edge.width = 2.5, vertex.shape = V(jgprevis)$name, vertex.size = vsizejpre, edge.alpha = 0.7)  
+
+# -----Graph of post-migration jars-----
+graphjs(jgpostvis, edge.color = colfunc(31), edge.width = 2.5, vertex.shape = V(jgpostvis)$name, vertex.size = vsizejpost, edge.alpha = 0.7)  
+
+# -----Graph of jars across time------
+graphjs(jgvis, edge.color = colfunc(112), edge.width = 2.5, vertex.shape = V(jgvis)$name, vertex.size = vsizejall, edge.alpha = 0.7) 
+
+# ------Graph of pre-migration plates------
+graphjs(pgprevis, edge.width = 2.5, edge.color = colfunc(63), vertex.shape = V(pgprevis)$name, vertex.size = vsizeppre, edge.alpha = 0.7) 
+
+# ------Graph of post-migration plates------
+graphjs(pgpostvis, edge.width = 2.5, edge.color = colfunc(29), vertex.shape = V(pgpostvis)$name, vertex.size = vsizeppost, edge.alpha = 0.7) 
+
+# ------Graph of plates across time------
+graphjs(pgvis, edge.width = 2.5, edge.color = colfunc(92), vertex.shape = V(pgvis)$name, vertex.size = vsizepall, edge.alpha = 0.7) 
+
+```
+
+
+```{r}
+# Animation of Jar Network Across time
+graphjs(jgvis, 
+        layout = list(layout_with_fr(jgvis, dim = 3), layout_with_fr(jgvis, dim = 3)),
+        edge.color = colfunc(112), edge.width = 2.5, vertex.shape = V(jgvis)$name,
+        vertex.size = vsizejall, edge.alpha = 0.7, fpl = 1000) 
+
+```
+
+Stay tuned and see you next time. -Andy
+
+# References Cited
+
+Eerkens, J.W., Bettinger, R.L., 2008. Cultural Transmission and the Analysis of Stylistic and Functional Variation, in: O’Brien, M.J. (Ed.), Cultural Transmission and Archaeology: Issues and Case Studies. The Society for American Archaeology, Washington D.C., pp. 21–38.
+
+Milner, 1999. Warfare in Prehistoric and Early Historic Eastern North America. J. Archaeol. Res. 7, 105–151.
+
+Peeples, M.A., 2011. Identity and Social Transformation in the Prehispanic Cibola World: A.D. 1150-1325. University of Arizona. https://doi.org/10.1017/CBO9781107415324.004
+
+Steadman, D.W., 2008. Warfare related trauma at Orendorf, a middle Mississippian site in west-central Illinois. Am. J. Phys. Anthropol. 136, 51–64. https://doi.org/10.1002/ajpa.20778
+
+Vanderwarker, A.M., Wilson, G.D., 2016. War, Food, and Structural Violence in the Mississippian Central Illinois Valley, in: Vanderwarker, A.M., Wilson, G.D. (Eds.), The Archaeology of Food and Warfare. Springer, pp. 75–105. https://doi.org/10.1007/978-3-319-18506-4
+
+Wiessner, P., 1984. Reconsidering the behavioral basis for style: A case study among the Kalahari San. J. Anthropol. Archaeol. 3, 190–234. https://doi.org/10.1016/0278-4165(84)90002-3
+
+Wilson, G.D., 2012. Living with War: the Impact of Chronic Violence in the Mississippian-Period Central Illinois River Valley, in: Pauketat, T.R. (Ed.), The Oxford Handbook of North American Archaeology. Oxford University Press, pp. 523–533.
+
+
+
+
+
+
