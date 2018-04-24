@@ -1,0 +1,17 @@
+---
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Archytransmission
+
+The routines provided in this repo allow for the creation of interaction networks based on morphological attributes of artifacts as a function of cultural transmission. The basic idea is to use statistical models developed by Eerkens and Bettinger (2008) to determine which artifact attributes are free to vary from site-assemblage to site-assemblage. Artifact attributes that do not vary significantly from site-assemblage to site-assemblage are considered to be more likely a product of engineering constraints, while those that do are considered to be more likely a production of social interaction through cultural transmission. 
+
+
+
+# References
+
+Eerkens, J.W., Bettinger, R.L., 2008. Cultural Transmission and the Analysis of Stylistic and Functional Variation, in: O’Brien, M.J. (Ed.), Cultural Transmission and Archaeology: Issues and Case Studies. The Society for American Archaeology, Washington D.C., pp. 21–38.
