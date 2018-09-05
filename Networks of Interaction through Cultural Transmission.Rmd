@@ -4,7 +4,7 @@ author: "Andy Upton"
 output: 
   html_document:
     theme: flatly
-    highlight: monochrome
+    highlight: tango
 ---
 
 ```{r setup, include=FALSE}
@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Searching for Variation
 
-Archaeology is, in many ways, the study of artifactual variation. Without written records, all there is to rely on are the materials remains and traces of past peoples to infer who they were, what they did, and maybe get to why they did what they did. Understanding artifactual variation can be particularly instructive in contexts where different material culture traditions merge, blend, or are otherwise present in the same place at the same time. 
+Archaeology is, in many ways, the study of artifactual variation. Without written records, all there is to rely on are the material remains and traces of past peoples to infer who they were, what they did, and maybe get to why they did what they did. Understanding artifactual variation can be particularly instructive in contexts where different material culture traditions merge, blend, or are otherwise present in the same place at the same time. 
 
 This post is all about exploring variation in artifacts to understand how different communities interacted with each other. The basic idea is that, artifacts or artifact attributes, should pattern differently if they were used in some capacity to send a social signal or if they were constrained by engineering principles. When using naturally available raw materials to make functional or decorative objects such as pottery vessels, arrowheads, axes, hair beads, clothing, or a birch bark canoe, there are limits imposed by those raw materials that constrain the ability to make things a certain way. You can only make an arrowhead so thick or long before it impedes your ability to be successful in hunting. Likewise, you can only make pottery so thin before it fails as a cooking vessel or hair beads so large and complex before impacting day to day activities. On the other hand, there can often be a significant amount of play in certain attributes. For example, with something as malleable as clay, cooking vessels have taken on a remarkable amount of diversity in such contexts as the [Jōmon period of Japan](https://www.ancient.eu/Jomon_Pottery/), [the Late Valdivia phase of coastal Ecuador](https://www.sciencedirect.com/science/article/pii/S0278416516300472), or [in the woodlands of eastern North America](https://archive.org/details/aboriginalpottery00holmrich). That these vessel forms can, and do, vary across the landscape and through time is evidence that people imbue the things they make with a sense of themselves and their communities as a tiny encapsulation of their interactions with others - who they learned from, imitated, or wanted to impress with their wares. Even in today's world, people continue to use material culture to send signals - wearing sports gear to show support for a favorite team, driving a fancy car or wearing a nice watch to show off wealth, wearing a ring to show a marriage relationship, or whole suites of clothing choices to send social signals indicating identification as a member of a particular group and not others. 
 
@@ -252,41 +252,79 @@ To get a sense of the variation present in these type-attributes, we can plot th
 pGathered <- gather(plates[, c(1, 2, 6, 7, 8)], Attribute, Value, MaxDiameter:MaxTrailing)
 jGathered <- gather(jars[, c(1, 5, 6, 7, 9)], Attribute, Value, MaxWall:MaxTrailing)
 
-# read in node tables to add column to arrange by time period in ridgeline plots
+# Read in node tables to add column to arrange by time period in ridgeline plots
 jar_node_table <- read_csv("Jar_node_table.csv")
 colnames(jar_node_table) <- c("Site", "Label", "Long", "Lat", "Time")
 plate_node_table <- read_csv("Plate_node_table.csv")
 colnames(plate_node_table) <- c("Site", "Label", "Long", "Lat", "Time")
 
-# join node table to allow for separating out sites by time in plots
+# Join node table to allow for separating out sites by time in plots
 pGathered <- pGathered %>% left_join(plate_node_table[c(1, 5)])
 pGathered$Time1 <- as.factor(pGathered$Time) # Add Time column as factor for discrete color scale
 jGathered <- jGathered %>% left_join(jar_node_table[c(1, 5)])
 jGathered$Time1 <- as.factor(jGathered$Time)
 
-# Create plate ridgeline plot
-pRidge <- pGathered %>% group_by(Site) %>% arrange(Time, Site) %>% 
-            ggplot(aes(x = Value, y = reorder(Site, desc(Time)), fill = Time1)) + 
-            geom_density_ridges() + 
-            facet_wrap(~Attribute, scale = "free") + 
-            theme(axis.text.y = element_text(size=12)) + 
-            xlab("") + 
-            ylab("") + ggtitle("Plate Attributes") +
-            scale_fill_brewer(palette = "Greens") + 
-            theme(legend.position = "none") 
+# Create vector of columns names to appear in the plot for plates
+p_attribute_names <- c(
+  "FlareAngle" = "Flare Angle (°)",
+  "MaxDiameter" = "Diameter (cm)",
+  "MaxIncising" = "Incising (mm)",
+  "MaxTrailing" = "Trailing (mm)"
+)
 
+# Create vector of columns names to appear in the plot for jars
+j_attribute_names <- c(
+  "MaxTrailing" = "Trailing (mm)",
+  "MaxWall" = "Wall Thickness (mm)", 
+  "RimAngle" = "Rim Angle (°)",
+  "RimHeight" = "Rim Height (mm)"
+)
+
+# Add a new factor level for Lawrenz and Buckeye, with occupations in both time periods
+# Also factor the Site levels for ordering in the plot
+ppGathered <- pGathered %>%
+  mutate(Time3 = ifelse(Site == "Buckeye Bend", 3, Time1)) %>%
+  mutate(Time4 = ifelse(Site == "Lawrenz Gun Club", 3, Time3)) %>%
+  mutate(Time4 = ifelse(Time4 == 2, 4, Time4)) %>%
+  mutate(Time4 = as.factor(.$Time4)) %>%
+  mutate(Site = as.factor(.$Site))
+
+jjGathered <- jGathered %>%
+  mutate(Time3 = ifelse(Site == "Buckeye Bend", 3, Time1)) %>%
+  mutate(Time4 = ifelse(Site == "Lawrenz Gun Club", 3, Time3)) %>%
+  mutate(Time4 = ifelse(Time4 == 2, 4, Time4)) %>%
+  mutate(Time4 = as.factor(.$Time4)) %>%
+  mutate(Site = as.factor(.$Site))
 
 # Create plate ridgeline plot
-jRidge <- jGathered %>% group_by(Site) %>% arrange(Site, Time) %>% 
-            ggplot(aes(x = Value, y = reorder(Site, desc(Time)), fill = Time1)) + 
-            geom_density_ridges() + 
-            facet_wrap(~Attribute, scale = "free") + 
-            theme(axis.text.y = element_text(size=12)) + 
-            xlab("") + 
-            ylab("") + ggtitle("Jar Attributes") +
-            scale_fill_brewer(palette = "Greens") + 
-            theme(legend.position = "none") 
-        
+pRidge <- ppGathered %>% 
+            group_by(Site) %>% 
+            arrange(Site, Time4) %>% 
+      ggplot(aes(x = Value, y = reorder(fct_rev(Site), desc(Time4)), fill = Time4)) + 
+      geom_density_ridges() + 
+      facet_wrap(~Attribute, scale = "free", labeller = as_labeller(p_attribute_names)) + 
+      theme(axis.text.y = element_text(size=12)) + 
+      xlab("") + 
+      ylab("") + ggtitle("Plate Attributes") +
+      scale_fill_brewer(palette = "Greens", name = "Site Occupation", labels = 
+                          c("Pre-Migration", "Pre & Post-Migration", "Post-Migration")) + 
+      theme_minimal() +
+      theme(strip.text.x = element_text(face = "bold"), panel.grid.major.y = element_blank())
+
+# Create plate ridgeline plot
+jRidge <- jjGathered %>% 
+            group_by(Site) %>% 
+            arrange(Site, Time4) %>% 
+      ggplot(aes(x = Value, y = reorder(fct_rev(Site), desc(Time4)), fill = Time4)) + 
+      geom_density_ridges() + 
+      facet_wrap(~Attribute, scale = "free", labeller = as_labeller(j_attribute_names)) + 
+      theme(axis.text.y = element_text(size=12)) + 
+      xlab("") + 
+      ylab("") + ggtitle("Plate Attributes") +
+      scale_fill_brewer(palette = "Greens", name = "Site Occupation", labels = 
+                          c("Pre-Migration", "Pre & Post-Migration", "Post-Migration")) + 
+      theme_minimal() +
+      theme(strip.text.x = element_text(face = "bold"), panel.grid.major.y = element_blank())
 
 # Show the jar ridgeline plot
 jRidge
@@ -454,7 +492,7 @@ plate_post_el_need_Law <- plate_edgelist_complete %>%
                            filter(Time == Time2) %>%
                            filter(Time == 2)
 
-# One site, Lawrenz Gun Club, has an occupation in both time periods, so we have to 
+# Two sites, Lawrenz Gun Club and Buckeye Bend, have occupations in both time periods, so we have to 
 # control for that
 Law_jar_post <- jar_edgelist_complete %>%
                   filter(Time == 2 & Target == "Lawrenz Gun Club" | 
@@ -468,16 +506,27 @@ Law_plate_post <- plate_edgelist_complete %>%
                     mutate(Time = replace(Time, Time==1, 2)) %>%
                     mutate(Time2 = replace(Time2, Time2==1, 2))
 
-# Bind the Lawrenz Gun Club post-migration edges to the post-migration edgelists
-jar_post_el_need_dist <- rbind(jar_post_el_need_Law, Law_jar_post)
+Buck_jar_post <- jar_edgelist_complete %>%
+                  filter(Time == 2 & Target == "Buckeye Bend" | 
+                           Source == "Buckeye Bend" & Time2 == 2 ) %>%
+                    mutate(Time = replace(Time, Time==1, 2)) %>%
+                    mutate(Time2 = replace(Time2, Time2==1, 2))
 
-plate_post_el_need_dist <- rbind(plate_post_el_need_Law, Law_plate_post)
+Buck_plate_post <- plate_edgelist_complete %>%
+                    filter(Time == 2 & Target == "Buckeye Bend" | 
+                             Source == "Buckeye Bend" & Time2 == 2 ) %>%
+                    mutate(Time = replace(Time, Time==1, 2)) %>%
+                    mutate(Time2 = replace(Time2, Time2==1, 2))
+
+# Bind the Lawrenz Gun Club post-migration edges to the post-migration edgelists
+jar_post_el_need_dist <- rbind(jar_post_el_need_Law, Law_jar_post, Buck_jar_post)
+
+plate_post_el_need_dist <- rbind(plate_post_el_need_Law, Law_plate_post, Buck_plate_post)
 
 # Adding geographic coordinates
 # Read in matrix of site distances
 site_distances <- read_csv("Site Distances Matrix in km.csv")
 site_distances <- column_to_rownames(site_distances, var = "X1") #first column of site names to rownames 
-
 # Convert geographic distance matrix to graph object
 distance_g <- graph_from_adjacency_matrix(as.matrix(site_distances), weighted = TRUE, 
                                                     mode = "directed")
@@ -503,7 +552,7 @@ plate_el_all_time_complete <- rbind(plate_pre_el_complete, plate_post_el_complet
 
 The complete and prepared edgelists from above are now ready to be plotted. There are many options to plot graph objects in R, but it's hard to beat the aesthetics of Gephi. [You can view a few of these graphs as rendered in Gephi here.](https://www.andyupton.net/multilayer-network-analysis) 
 
-In my next post on this subject, I'll discuss how to analyze networks such as these using a variety of routines in the igraph package as well as how to understand the results using Monte Carlo similations based on network randomization. Also coming is a post describing how to combine these networks together in a multilayer network analysis. For a full description of the methods used and interpretations, you'll have to wait for my dissertation to be defended. That's coming later in 2018. 
+In my next post on this subject, I'll discuss how to analyze networks such as these using a variety of routines in the igraph package as well as how to understand the results of using Monte Carlo similations based on network randomization. Also coming is a post describing how to combine these networks together in a multilayer network analysis. For a full description of the methods used and interpretations, you'll have to wait for my dissertation to be defended. That's coming later in 2018. 
 
 Until then, let's visualize each graph object in 3D to show off the archaeological ceramic attribute networks in their full glory! Returning to our questions from the introduction, what do you think might be said about interaction patterns and their role structuring Oneota in-migration based on the network models below? 
 
@@ -545,9 +594,9 @@ colfunc <- colorRampPalette(c("yellow", "orange", "red"))
 # Create a vector of sizes for the vertices' labels
 vsizejall <- rep.int(.25, 18)
 vsizejpre <- rep.int(.25, 12)
-vsizejpost <- rep.int(.25, 7)
+vsizejpost <- rep.int(.25, 8)
 vsizeppre <- rep.int(.25, 11)
-vsizeppost <- rep.int(.25, 6)
+vsizeppost <- rep.int(.25, 7)
 vsizepall <- rep.int(.25, 16)
 
 # colfunction is used to create a color scale for the edges
@@ -558,19 +607,19 @@ vsizepall <- rep.int(.25, 16)
 graphjs(jgprevis, edge.color = colfunc(81), edge.width = 2.5, vertex.shape = V(jgprevis)$name, vertex.size = vsizejpre, edge.alpha = 0.7)  
 
 # -----Graph of post-migration jars-----
-graphjs(jgpostvis, edge.color = colfunc(31), edge.width = 2.5, vertex.shape = V(jgpostvis)$name, vertex.size = vsizejpost, edge.alpha = 0.7)  
+graphjs(jgpostvis, edge.color = colfunc(40), edge.width = 2.5, vertex.shape = V(jgpostvis)$name, vertex.size = vsizejpost, edge.alpha = 0.7)  
 
 # -----Graph of jars across time------
-graphjs(jgvis, edge.color = colfunc(112), edge.width = 2.5, vertex.shape = V(jgvis)$name, vertex.size = vsizejall, edge.alpha = 0.7) 
+graphjs(jgvis, edge.color = colfunc(121), edge.width = 2.5, vertex.shape = V(jgvis)$name, vertex.size = vsizejall, edge.alpha = 0.7) 
 
 # ------Graph of pre-migration plates------
 graphjs(pgprevis, edge.width = 2.5, edge.color = colfunc(63), vertex.shape = V(pgprevis)$name, vertex.size = vsizeppre, edge.alpha = 0.7) 
 
 # ------Graph of post-migration plates------
-graphjs(pgpostvis, edge.width = 2.5, edge.color = colfunc(29), vertex.shape = V(pgpostvis)$name, vertex.size = vsizeppost, edge.alpha = 0.7) 
+graphjs(pgpostvis, edge.width = 2.5, edge.color = colfunc(38), vertex.shape = V(pgpostvis)$name, vertex.size = vsizeppost, edge.alpha = 0.7) 
 
 # ------Graph of plates across time------
-graphjs(pgvis, edge.width = 2.5, edge.color = colfunc(92), vertex.shape = V(pgvis)$name, vertex.size = vsizepall, edge.alpha = 0.7) 
+graphjs(pgvis, edge.width = 2.5, edge.color = colfunc(101), vertex.shape = V(pgvis)$name, vertex.size = vsizepall, edge.alpha = 0.7) 
 
 ```
 
@@ -579,7 +628,7 @@ graphjs(pgvis, edge.width = 2.5, edge.color = colfunc(92), vertex.shape = V(pgvi
 # Animation of Jar Network Across time
 graphjs(jgvis, 
         layout = list(layout_with_fr(jgvis, dim = 3), layout_with_fr(jgvis, dim = 3)),
-        edge.color = colfunc(112), edge.width = 2.5, vertex.shape = V(jgvis)$name,
+        edge.color = colfunc(121), edge.width = 2.5, vertex.shape = V(jgvis)$name,
         vertex.size = vsizejall, edge.alpha = 0.7, fpl = 1000) 
 
 ```
